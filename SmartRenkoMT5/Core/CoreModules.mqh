@@ -157,6 +157,9 @@ void CCoreOrchestrator::OnTick()
     
    if(m_position_manager != NULL)
       m_position_manager.UpdatePositionProfit();
+   
+   if(m_risk_manager != NULL)
+      m_risk_manager->UpdateMetrics();
     
    SBasket active_basket;
    ZeroMemory(active_basket);
@@ -366,6 +369,9 @@ bool CCoreOrchestrator::TryOpenFirstEntry(const string basket_id)
    SMoneyInput money_input = BuildMoneyInput(basket_id, false, 0);
    if(!m_risk_manager->ValidateEntry(money_input))
       return false;
+   if(!m_risk_manager->CheckMaxBasketLoss(basket)) return false;
+   if(!m_risk_manager->CheckMaxSymbolExposure(m_symbol)) return false;
+      return false;
     
    SMoneyResult lot_result = m_money_manager->CalculateLot(money_input);
    if(!lot_result.allowed)
@@ -444,6 +450,8 @@ bool CCoreOrchestrator::TryAddOnEntry(const SBasket &basket, const SRenkoBrick &
    SMoneyInput money_input = BuildMoneyInput(basket.id, true, basket.add_entry_count + 1);
    if(!m_risk_manager->ValidateAddOn(money_input))
       return false;
+   if(!m_risk_manager->CheckMaxBasketLoss(basket)) return false;
+   if(!m_risk_manager->CheckMaxSymbolExposure(m_symbol)) return false;
     
    SMoneyResult lot_result = m_money_manager->CalculateLot(money_input);
    if(!lot_result.allowed)
@@ -504,7 +512,12 @@ SMoneyInput CCoreOrchestrator::BuildMoneyInput(const string basket_id, const boo
    input.is_add_on = is_add_on;
    input.add_entry_number = add_entry_number;
    input.basket_risk_percent = 1.0;
-   input.stop_loss_pips = 0.0;
+    
+   if(m_money_manager != NULL)
+   {
+      input.stop_loss_pips = 0.0;
+   }
+    
    return input;
 }
 

@@ -54,6 +54,8 @@ input bool               InpEnableNotifications = true;
 input bool               InpEnableReporting    = true;
 input string             InpProfileName        = "Default";
 input double             InpRenkoBrickSize     = 0.0;
+input string             InpRiskConfig         = "daily_realized_loss_limit=100;floating_drawdown_threshold=50;max_total_open_trades=10;spread_max=50;cooldown_minutes=30";
+input string             InpMoneyConfig        = "use_balance_based=1;balance_factor=1;fixed_lot=0.1";
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -185,14 +187,14 @@ int OnInit()
    {
       SRiskMetrics metrics;
       ZeroMemory(metrics);
-      g_risk_mgr.OnInit(metrics, "{}");
+      g_risk_mgr.OnInit(metrics, InpRiskConfig);
       g_orchestrator.SetRiskManager(g_risk_mgr);
    }
 
    g_money_mgr = new CMoneyManager();
    if(g_money_mgr != NULL)
    {
-      g_money_mgr.OnInit("{}");
+      g_money_mgr.OnInit(InpMoneyConfig);
       g_orchestrator.SetMoneyManager(g_money_mgr);
    }
 
