@@ -63,116 +63,186 @@ public:
    bool   SetPresetManager(IPresetProfileManager* preset);
    bool   SetVpsRunner(IVpsRunner* vps);
    
-   bool   EmergencyFlatten();
-   bool   ForceCloseBasket(const string basket_id);
+    bool   EmergencyFlatten();
+    bool   ForceCloseBasket(const string basket_id);
 };
 
 //+------------------------------------------------------------------+
-//| Signal Manager                                                    |
+//| CCoreOrchestrator Implementation                                 |
 //+------------------------------------------------------------------+
-class ISignalManager
+CCoreOrchestrator::CCoreOrchestrator() : m_symbol(""),
+   m_magic_number(0),
+   m_trading_mode(TRADING_MODE_FULL_AUTO),
+   m_initialized(false),
+   m_last_tick_time(0)
 {
-public:
-   virtual bool      OnInit(const long magic_number) = 0;
-   virtual void      OnDeinit() = 0;
-   
-   virtual bool      RegisterEntryStrategy(IEntryStrategy* strategy) = 0;
-   virtual bool      RegisterExitStrategy(IExitStrategy* strategy) = 0;
-   virtual bool      AggregateSignals(SSignal &final_signal) = 0;
-   virtual bool      NormalizeSignal(SSignal &signal) = 0;
-   virtual string    GetDiagnostics() = 0;
-};
+   m_renko_provider = NULL;
+   m_entry_strategy = NULL;
+   m_exit_strategy = NULL;
+   m_signal_manager = NULL;
+   m_basket_manager = NULL;
+   m_position_manager = NULL;
+   m_risk_manager = NULL;
+   m_money_manager = NULL;
+   m_trailing_manager = NULL;
+   m_execution_adapter = NULL;
+   m_persistence_layer = NULL;
+   m_notification_manager = NULL;
+   m_reporting_engine = NULL;
+   m_gui_layer = NULL;
+   m_preset_manager = NULL;
+   m_vps_runner = NULL;
+}
 
-//+------------------------------------------------------------------+
-//| Basket Manager                                                    |
-//+------------------------------------------------------------------+
-class IBasketManager
+CCoreOrchestrator::~CCoreOrchestrator()
 {
-public:
-   virtual bool      OnInit(const string symbol, const long magic_number, IPersistenceLayer* persistence) = 0;
-   virtual void      OnDeinit() = 0;
-   
-   virtual bool      CreateBasket(const ENUM_POSITION_TYPE direction) = 0;
-   virtual bool      GetActiveBasket(SBasket &basket) = 0;
-   virtual bool      UpdateBasketState(const string basket_id, const ENUM_BASKET_STATE new_state) = 0;
-   virtual bool      CloseBasket(const string basket_id, const ENUM_CLOSURE_REASON reason) = 0;
-   virtual bool      AddEntry(const string basket_id) = 0;
-   virtual bool      ReconstructFromPositions() = 0;
-   virtual bool      ReconstructFromPersistence() = 0;
-   virtual string    GetDiagnostics() = 0;
-   virtual int       GetActiveBasketCount() = 0;
-};
+   Deinit();
+}
 
-//+------------------------------------------------------------------+
-//| Position Manager                                                  |
-//+------------------------------------------------------------------+
-class IPositionManager
+bool CCoreOrchestrator::Init(const string symbol, const long magic, const ENUM_TRADING_MODE mode)
 {
-public:
-   virtual bool      OnInit(const string symbol, const long magic_number, IExecutionAdapter* adapter) = 0;
-   virtual void      OnDeinit() = 0;
-   
-   virtual bool      OpenPosition(const string basket_id, const ENUM_POSITION_TYPE type, const double volume, const double price, const double sl, const double tp, const string comment) = 0;
-   virtual bool      ClosePosition(const ulong ticket) = 0;
-   virtual bool      CloseAllPositions(const string basket_id) = 0;
-   virtual bool      GetPositionsByBasket(const string basket_id, SPosition &positions[], int &count) = 0;
-   virtual bool      GetOpenPositions(SPosition &positions[], int &count) = 0;
-   virtual bool      UpdatePositionProfit() = 0;
-   virtual double    GetTotalProfit(const string basket_id = "") = 0;
-   virtual int       GetOpenPositionCount() = 0;
-   virtual string    GetDiagnostics() = 0;
-};
+   m_symbol = symbol;
+   m_magic_number = magic;
+   m_trading_mode = mode;
+   m_initialized = true;
+   m_last_tick_time = TimeCurrent();
+   return true;
+}
 
-//+------------------------------------------------------------------+
-//| Risk Manager                                                      |
-//+------------------------------------------------------------------+
-class IRiskManager
+void CCoreOrchestrator::Deinit()
 {
-public:
-   virtual bool      OnInit(const SRiskMetrics &initial_metrics, const string config_json) = 0;
-   virtual void      OnDeinit() = 0;
-   
-   virtual bool      ValidateEntry(const SMoneyInput &money_input) = 0;
-   virtual bool      ValidateAddOn(const SMoneyInput &money_input) = 0;
-   virtual bool      ValidateExit(const SBasket &basket) = 0;
-   virtual bool      CheckEmergencyFlatten() = 0;
-   virtual bool      CheckDailyLossLimit() = 0;
-   virtual bool      CheckMaxOpenTrades() = 0;
-   virtual bool      CheckSpreadFilter() = 0;
-   virtual bool      CheckCooldown() = 0;
-   virtual bool      TriggerCooldown(const datetime until) = 0;
-   virtual SRiskMetrics GetMetrics() = 0;
-   virtual string    GetDiagnostics() = 0;
-};
+   m_initialized = false;
+}
 
-//+------------------------------------------------------------------+
-//| Money Manager                                                     |
-//+------------------------------------------------------------------+
-class IMoneyManager
+void CCoreOrchestrator::OnTick()
 {
-public:
-   virtual bool      OnInit(const string config_json) = 0;
-   virtual void      OnDeinit() = 0;
-   
-   virtual SMoneyResult CalculateLot(const SMoneyInput &input) = 0;
-   virtual bool      ValidateLot(const double lot, const double min_lot, const double max_lot, const double lot_step) = 0;
-   virtual string    GetDiagnostics() = 0;
-};
+   if(!m_initialized) return;
+   m_last_tick_time = TimeCurrent();
+}
 
-//+------------------------------------------------------------------+
-//| Trailing Manager                                                  |
-//+------------------------------------------------------------------+
-class ITrailingManager
+void CCoreOrchestrator::OnTimer()
 {
-public:
-   virtual bool      OnInit(const string basket_id, const double start_balance, const double threshold, const double trail_amount, const string config_json) = 0;
-   virtual void      OnDeinit() = 0;
-   
-   virtual bool      Evaluate(const double current_floating_profit) = 0;
-   virtual bool      IsActive() = 0;
-   virtual double    GetPeakProfit() = 0;
-   virtual bool      RestoreState(const double peak_profit, const bool activated) = 0;
-   virtual string    GetDiagnostics() = 0;
-};
+}
+
+void CCoreOrchestrator::OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+{
+}
+
+string CCoreOrchestrator::GetStatus() const
+{
+   return StringConcatenate("symbol=", m_symbol, " magic=", IntegerToString(m_magic_number), " mode=", EnumToString(m_trading_mode), " initialized=", (m_initialized ? "yes" : "no"));
+}
+
+bool CCoreOrchestrator::SetRenkoProvider(IRenkoDataProvider* provider)
+{
+   m_renko_provider = provider;
+   return true;
+}
+
+bool CCoreOrchestrator::SetEntryStrategy(IEntryStrategy* strategy)
+{
+   m_entry_strategy = strategy;
+   return true;
+}
+
+bool CCoreOrchestrator::SetExitStrategy(IExitStrategy* strategy)
+{
+   m_exit_strategy = strategy;
+   return true;
+}
+
+bool CCoreOrchestrator::SetSignalManager(ISignalManager* manager)
+{
+   m_signal_manager = manager;
+   return true;
+}
+
+bool CCoreOrchestrator::SetBasketManager(IBasketManager* manager)
+{
+   m_basket_manager = manager;
+   return true;
+}
+
+bool CCoreOrchestrator::SetPositionManager(IPositionManager* manager)
+{
+   m_position_manager = manager;
+   return true;
+}
+
+bool CCoreOrchestrator::SetRiskManager(IRiskManager* manager)
+{
+   m_risk_manager = manager;
+   return true;
+}
+
+bool CCoreOrchestrator::SetMoneyManager(IMoneyManager* manager)
+{
+   m_money_manager = manager;
+   return true;
+}
+
+bool CCoreOrchestrator::SetTrailingManager(ITrailingManager* manager)
+{
+   m_trailing_manager = manager;
+   return true;
+}
+
+bool CCoreOrchestrator::SetExecutionAdapter(IExecutionAdapter* adapter)
+{
+   m_execution_adapter = adapter;
+   return true;
+}
+
+bool CCoreOrchestrator::SetPersistenceLayer(IPersistenceLayer* persistence)
+{
+   m_persistence_layer = persistence;
+   return true;
+}
+
+bool CCoreOrchestrator::SetNotificationManager(INotificationManager* notifier)
+{
+   m_notification_manager = notifier;
+   return true;
+}
+
+bool CCoreOrchestrator::SetReportingEngine(IReportingEngine* reporter)
+{
+   m_reporting_engine = reporter;
+   return true;
+}
+
+bool CCoreOrchestrator::SetGuiLayer(IGuiLayer* gui)
+{
+   m_gui_layer = gui;
+   return true;
+}
+
+bool CCoreOrchestrator::SetPresetManager(IPresetProfileManager* preset)
+{
+   m_preset_manager = preset;
+   return true;
+}
+
+bool CCoreOrchestrator::SetVpsRunner(IVpsRunner* vps)
+{
+   m_vps_runner = vps;
+   return true;
+}
+
+bool CCoreOrchestrator::EmergencyFlatten()
+{
+   if(m_execution_adapter != NULL)
+      m_execution_adapter.CloseAllPositions();
+   return true;
+}
+
+bool CCoreOrchestrator::ForceCloseBasket(const string basket_id)
+{
+   if(m_basket_manager != NULL)
+      m_basket_manager.CloseBasket(basket_id, CLOSURE_REASON_EMERGENCY_FLATTEN);
+   if(m_position_manager != NULL)
+      m_position_manager.CloseAllPositions(basket_id);
+   return true;
+}
 
 #endif // COREMODULES_MQH_GUARD

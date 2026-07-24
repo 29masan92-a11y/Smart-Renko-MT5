@@ -6,10 +6,30 @@
 #property strict
 
 #include "Core/CoreModules.mqh"
-#include "Core/ModuleImplementations.mqh"
+#include "Core/BasketManager.mqh"
+#include "Core/PositionManager.mqh"
+#include "Core/SignalManager.mqh"
+#include "Core/RiskManager.mqh"
+#include "Core/MoneyManager.mqh"
+#include "Core/TrailingManager.mqh"
+#include "Core/ExecutionAdapter.mqh"
+#include "Core/PersistenceLayer.mqh"
+#include "Core/NotificationManager.mqh"
+#include "Core/ReportingEngine.mqh"
+#include "Core/GuiLayer.mqh"
+#include "Core/PresetProfileManager.mqh"
+#include "Core/VpsRunner.mqh"
 
 //--- Global handles
 CCoreOrchestrator*     g_orchestrator = NULL;
+CBasketManager*        g_basket_mgr = NULL;
+CPositionManager*      g_position_mgr = NULL;
+CSignalManager*        g_signal_mgr = NULL;
+CRiskManager*          g_risk_mgr = NULL;
+CMoneyManager*         g_money_mgr = NULL;
+CTrailingManager*      g_trailing_mgr = NULL;
+CExecutionAdapter*     g_execution = NULL;
+CPersistenceLayer*     g_persistence = NULL;
 CGuiLayer*             g_gui = NULL;
 CVpsRunner*            g_vps = NULL;
 CNotificationManager*  g_notifier = NULL;
@@ -100,6 +120,75 @@ int OnInit()
       g_orchestrator.SetPresetManager(g_presets);
    }
 
+   g_persistence = new CPersistenceLayer();
+   if(g_persistence != NULL)
+   {
+      g_persistence.OnInit("SmartRenko");
+      g_orchestrator.SetPersistenceLayer(g_persistence);
+   }
+
+   g_execution = new CExecutionAdapter();
+   if(g_execution != NULL)
+   {
+      g_execution.OnInit(symbol, InpMagicNumber);
+      g_orchestrator.SetExecutionAdapter(g_execution);
+   }
+
+   g_basket_mgr = new CBasketManager();
+   if(g_basket_mgr != NULL)
+   {
+      g_basket_mgr.OnInit(symbol, InpMagicNumber, g_persistence);
+      g_orchestrator.SetBasketManager(g_basket_mgr);
+   }
+
+   g_position_mgr = new CPositionManager();
+   if(g_position_mgr != NULL)
+   {
+      g_position_mgr.OnInit(symbol, InpMagicNumber, g_execution);
+      g_orchestrator.SetPositionManager(g_position_mgr);
+   }
+
+   g_signal_mgr = new CSignalManager();
+   if(g_signal_mgr != NULL)
+   {
+      g_signal_mgr.OnInit(InpMagicNumber);
+      g_orchestrator.SetSignalManager(g_signal_mgr);
+   }
+
+   g_risk_mgr = new CRiskManager();
+   if(g_risk_mgr != NULL)
+   {
+      SRiskMetrics metrics;
+      ZeroMemory(metrics);
+      g_risk_mgr.OnInit(metrics, "{}");
+      g_orchestrator.SetRiskManager(g_risk_mgr);
+   }
+
+   g_money_mgr = new CMoneyManager();
+   if(g_money_mgr != NULL)
+   {
+      g_money_mgr.OnInit("{}");
+      g_orchestrator.SetMoneyManager(g_money_mgr);
+   }
+
+   g_trailing_mgr = new CTrailingManager();
+   if(g_trailing_mgr != NULL)
+   {
+      g_trailing_mgr.OnInit("", 0.0, 0.0, 0.0, "{}");
+      g_orchestrator.SetTrailingManager(g_trailing_mgr);
+   }
+
+   if(g_basket_mgr != NULL)
+   {
+      if(!g_basket_mgr.ReconstructFromPersistence())
+      {
+         if(!g_basket_mgr.ReconstructFromPositions())
+         {
+            Print("INFO: No active basket to reconstruct");
+         }
+      }
+   }
+
    EventSetTimer(1);
 
    Print("Smart Renko MT5 initialized. Symbol=", symbol, " Magic=", InpMagicNumber, " Mode=", EnumToString(InpTradingMode));
@@ -142,6 +231,62 @@ void OnDeinit(const int reason)
       g_reporter = NULL;
    }
 
+   if(g_trailing_mgr != NULL)
+   {
+      g_trailing_mgr.OnDeinit();
+      delete g_trailing_mgr;
+      g_trailing_mgr = NULL;
+   }
+
+   if(g_money_mgr != NULL)
+   {
+      g_money_mgr.OnDeinit();
+      delete g_money_mgr;
+      g_money_mgr = NULL;
+   }
+
+   if(g_risk_mgr != NULL)
+   {
+      g_risk_mgr.OnDeinit();
+      delete g_risk_mgr;
+      g_risk_mgr = NULL;
+   }
+
+   if(g_signal_mgr != NULL)
+   {
+      g_signal_mgr.OnDeinit();
+      delete g_signal_mgr;
+      g_signal_mgr = NULL;
+   }
+
+   if(g_position_mgr != NULL)
+   {
+      g_position_mgr.OnDeinit();
+      delete g_position_mgr;
+      g_position_mgr = NULL;
+   }
+
+   if(g_basket_mgr != NULL)
+   {
+      g_basket_mgr.OnDeinit();
+      delete g_basket_mgr;
+      g_basket_mgr = NULL;
+   }
+
+   if(g_execution != NULL)
+   {
+      g_execution.OnDeinit();
+      delete g_execution;
+      g_execution = NULL;
+   }
+
+   if(g_persistence != NULL)
+   {
+      g_persistence.OnDeinit();
+      delete g_persistence;
+      g_persistence = NULL;
+   }
+
    if(g_presets != NULL)
    {
       g_presets.OnDeinit();
@@ -154,6 +299,35 @@ void OnDeinit(const int reason)
       g_orchestrator.Deinit();
       delete g_orchestrator;
       g_orchestrator = NULL;
+   }
+
+   if(g_reporter != NULL)
+   {
+      g_reporter.OnDeinit();
+      delete g_reporter;
+      g_reporter = NULL;
+   }
+
+   if(g_notifier != NULL)
+   {
+      g_notifier.OnDeinit();
+      delete g_notifier;
+      g_notifier = NULL;
+   }
+
+   if(g_gui != NULL)
+   {
+      g_gui.OnDeinit();
+      delete g_gui;
+      g_gui = NULL;
+   }
+
+   if(g_vps != NULL)
+   {
+      g_vps.Stop();
+      g_vps.OnDeinit();
+      delete g_vps;
+      g_vps = NULL;
    }
 
    Print("Smart Renko MT5 deinitialized. Reason=", reason);

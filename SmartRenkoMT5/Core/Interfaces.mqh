@@ -98,6 +98,7 @@ public:
    virtual bool      SavePendingProtection(const SRiskMetrics &metrics) = 0;
    virtual bool      LoadPendingProtection(SRiskMetrics &metrics) = 0;
    virtual bool      ClearAll() = 0;
+   virtual bool      ListBaskets(string &basket_ids[], int &count) = 0;
    virtual string    GetStatus() = 0;
 };
 
