@@ -19,9 +19,11 @@
 #include "Core/GuiLayer.mqh"
 #include "Core/PresetProfileManager.mqh"
 #include "Core/VpsRunner.mqh"
+#include "Core/RenkoDataProvider.mqh"
 
 //--- Global handles
 CCoreOrchestrator*     g_orchestrator = NULL;
+CRenkoDataProvider*    g_renko_provider = NULL;
 CBasketManager*        g_basket_mgr = NULL;
 CPositionManager*      g_position_mgr = NULL;
 CSignalManager*        g_signal_mgr = NULL;
@@ -45,6 +47,7 @@ input bool               InpEnableVps          = false;
 input bool               InpEnableNotifications = true;
 input bool               InpEnableReporting    = true;
 input string             InpProfileName        = "Default";
+input double             InpRenkoBrickSize     = 0.0;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -69,6 +72,22 @@ int OnInit()
       delete g_orchestrator;
       g_orchestrator = NULL;
       return(INIT_FAILED);
+   }
+
+   g_renko_provider = new CRenkoDataProvider();
+   if(g_renko_provider != NULL)
+   {
+      double brick_size = InpRenkoBrickSize;
+      if(brick_size <= 0.0)
+      {
+         double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+         int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+         brick_size = 10.0 * point * MathPow(10.0, digits - 3);
+         if(brick_size <= 0.0)
+            brick_size = 0.01;
+      }
+      g_renko_provider.OnInit(symbol, brick_size);
+      g_orchestrator.SetRenkoProvider(g_renko_provider);
    }
 
    if(InpEnableGui)
@@ -201,6 +220,13 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    EventKillTimer();
+
+   if(g_renko_provider != NULL)
+   {
+      g_renko_provider.OnDeinit();
+      delete g_renko_provider;
+      g_renko_provider = NULL;
+   }
 
    if(g_vps != NULL)
    {
@@ -340,6 +366,9 @@ void OnTick()
 {
    if(g_orchestrator == NULL || !g_orchestrator.IsInitialized())
       return;
+
+   if(g_renko_provider != NULL)
+      g_renko_provider.OnTick();
 
    g_orchestrator.OnTick();
 
