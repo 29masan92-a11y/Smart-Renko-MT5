@@ -33,6 +33,7 @@ public:
    virtual bool UpdatePositionProfit();
    virtual double GetTotalProfit(const string basket_id = "");
    virtual int GetOpenPositionCount();
+   virtual int GetOpenPositionCountByBasket(const string basket_id);
    virtual string GetDiagnostics();
 };
 
@@ -253,6 +254,17 @@ int CPositionManager::GetOpenPositionCount()
    for(int i = 0; i < m_position_count; i++)
    {
       if(m_positions[i].is_active)
+         count++;
+   }
+   return count;
+}
+
+int CPositionManager::GetOpenPositionCountByBasket(const string basket_id)
+{
+   int count = 0;
+   for(int i = 0; i < m_position_count; i++)
+   {
+      if(m_positions[i].is_active && m_positions[i].basket_id == basket_id)
          count++;
    }
    return count;

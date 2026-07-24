@@ -204,6 +204,7 @@ public:
    virtual bool      AggregateSignals(SSignal &final_signal) = 0;
    virtual bool      AggregateExitSignals(SSignal &exit_signal, const SBasket &basket, const SPosition &position, const double current_profit) = 0;
    virtual bool      NormalizeSignal(SSignal &signal) = 0;
+   virtual bool      SetRenkoProvider(IRenkoDataProvider* provider) = 0;
    virtual string    GetDiagnostics() = 0;
 };
 
@@ -223,6 +224,7 @@ public:
    virtual bool      AddEntry(const string basket_id) = 0;
    virtual bool      ReconstructFromPositions() = 0;
    virtual bool      ReconstructFromPersistence() = 0;
+   virtual bool      SetStartBalance(const string basket_id, const double balance) = 0;
    virtual string    GetDiagnostics() = 0;
    virtual int       GetActiveBasketCount() = 0;
 };
@@ -244,6 +246,7 @@ public:
    virtual bool      UpdatePositionProfit() = 0;
    virtual double    GetTotalProfit(const string basket_id = "") = 0;
    virtual int       GetOpenPositionCount() = 0;
+   virtual int       GetOpenPositionCountByBasket(const string basket_id) = 0;
    virtual string    GetDiagnostics() = 0;
 };
 

@@ -18,20 +18,22 @@ private:
    SSignal                 m_last_signal;
    SSignal                 m_last_exit_signal;
    bool                    m_initialized;
+   IRenkoDataProvider*     m_renko_provider;
 
 public:
    CSignalManager();
    virtual ~CSignalManager();
-   
+    
    virtual bool OnInit(const long magic_number);
    virtual void OnDeinit();
-   
+    
    virtual bool RegisterEntryStrategy(IEntryStrategy* strategy);
    virtual bool RegisterExitStrategy(IExitStrategy* strategy);
    virtual bool AggregateSignals(SSignal &final_signal);
    virtual bool NormalizeSignal(SSignal &signal);
+   virtual bool SetRenkoProvider(IRenkoDataProvider* provider);
    virtual string GetDiagnostics();
-   
+    
    bool AggregateExitSignals(SSignal &exit_signal, const SBasket &basket, const SPosition &position, const double current_profit);
 };
 
@@ -41,7 +43,8 @@ public:
 CSignalManager::CSignalManager() : m_magic_number(0),
    m_entry_count(0),
    m_exit_count(0),
-   m_initialized(false)
+   m_initialized(false),
+   m_renko_provider(NULL)
 {
    ZeroMemory(m_last_signal);
    ZeroMemory(m_last_exit_signal);
@@ -58,6 +61,7 @@ bool CSignalManager::OnInit(const long magic_number)
    m_entry_count = 0;
    m_exit_count = 0;
    m_initialized = true;
+   m_renko_provider = NULL;
    ArrayFree(m_entry_strategies);
    ArrayFree(m_exit_strategies);
    ZeroMemory(m_last_signal);
@@ -70,6 +74,7 @@ void CSignalManager::OnDeinit()
    m_entry_count = 0;
    m_exit_count = 0;
    m_initialized = false;
+   m_renko_provider = NULL;
    ArrayFree(m_entry_strategies);
    ArrayFree(m_exit_strategies);
    ZeroMemory(m_last_signal);
@@ -96,6 +101,12 @@ bool CSignalManager::RegisterExitStrategy(IExitStrategy* strategy)
    return true;
 }
 
+bool CSignalManager::SetRenkoProvider(IRenkoDataProvider* provider)
+{
+   m_renko_provider = provider;
+   return true;
+}
+
 bool CSignalManager::AggregateSignals(SSignal &final_signal)
 {
    ZeroMemory(final_signal);
@@ -105,27 +116,39 @@ bool CSignalManager::AggregateSignals(SSignal &final_signal)
    final_signal.brick_index = 0;
    final_signal.signal_time = TimeCurrent();
    final_signal.metadata = "no entry strategies registered";
-   
+    
    if(m_entry_count <= 0)
       return false;
-   
+    
+   if(m_renko_provider == NULL)
+   {
+      final_signal.metadata = "no renko provider";
+      return false;
+   }
+    
+   SRenkoBrick current_brick;
+   if(!m_renko_provider.GetCurrentBrick(current_brick))
+   {
+      final_signal.metadata = "no current brick";
+      return false;
+   }
+    
    SSignal best_signal;
    ZeroMemory(best_signal);
    best_signal.strength = -1.0;
-   
+    
    bool found = false;
-   
+    
    for(int i = 0; i < m_entry_count; i++)
    {
       if(m_entry_strategies[i] == NULL) continue;
-      
-      SRenkoBrick brick;
-      if(!m_entry_strategies[i]->IsEligible(brick, TRADING_MODE_FULL_AUTO))
+        
+      if(!m_entry_strategies[i]->IsEligible(current_brick, TRADING_MODE_FULL_AUTO))
          continue;
-      
+        
       SSignal signal;
       ZeroMemory(signal);
-      if(m_entry_strategies[i]->GenerateSignal(signal, brick))
+      if(m_entry_strategies[i]->GenerateSignal(signal, current_brick))
       {
          if(signal.direction != SIGNAL_DIRECTION_NONE && signal.strength > best_signal.strength)
          {
@@ -134,17 +157,17 @@ bool CSignalManager::AggregateSignals(SSignal &final_signal)
          }
       }
    }
-   
+    
    if(!found)
    {
       final_signal.metadata = "no eligible signals";
       return false;
    }
-   
+    
    final_signal = best_signal;
    NormalizeSignal(final_signal);
    m_last_signal = final_signal;
-   
+    
    return true;
 }
 

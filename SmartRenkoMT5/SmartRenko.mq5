@@ -243,6 +243,8 @@ int OnInit()
           g_signal_mgr.RegisterExitStrategy(g_trailing_exit_strategy);
        if(g_position_exit_strategy != NULL)
           g_signal_mgr.RegisterExitStrategy(g_position_exit_strategy);
+       if(g_renko_provider != NULL)
+          g_signal_mgr.SetRenkoProvider(g_renko_provider);
     }
 
     if(g_basket_mgr != NULL)
@@ -468,6 +470,21 @@ void OnTimer()
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
 {
+   if(id == CHARTEVENT_KEYDOWN)
+   {
+      int key = (int)lparam;
+      if(key == 66)
+      {
+         if(g_orchestrator != NULL && g_orchestrator.IsInitialized())
+            g_orchestrator.RequestManualEntry(POSITION_TYPE_LONG);
+      }
+      else if(key == 83)
+      {
+         if(g_orchestrator != NULL && g_orchestrator.IsInitialized())
+            g_orchestrator.RequestManualEntry(POSITION_TYPE_SHORT);
+      }
+   }
+    
    if(g_gui != NULL)
       g_gui.OnChartEvent(id, lparam, dparam, sparam);
 }

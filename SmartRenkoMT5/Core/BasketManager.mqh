@@ -37,6 +37,7 @@ public:
    virtual bool AddEntry(const string basket_id);
    virtual bool ReconstructFromPositions();
    virtual bool ReconstructFromPersistence();
+   virtual bool SetStartBalance(const string basket_id, const double balance);
    virtual string GetDiagnostics();
    virtual int GetActiveBasketCount();
 };
@@ -122,8 +123,8 @@ bool CBasketManager::IsTransitionValid(const ENUM_BASKET_STATE current, const EN
       case BASKET_STATE_CLOSED:
          return (target == BASKET_STATE_IDLE || target == BASKET_STATE_RECOVERY_REBUILD);
          
-      case BASKET_STATE_RECOVERY_REBUILD:
-         return (target == BASKET_STATE_IDLE || target == BASKET_STATE_ACTIVE || target == BASKET_STATE_PENDING_FIRST_ENTRY);
+       case BASKET_STATE_RECOVERY_REBUILD:
+          return (target == BASKET_STATE_IDLE || target == BASKET_STATE_ACTIVE || target == BASKET_STATE_PENDING_FIRST_ENTRY || target == BASKET_STATE_CLOSING || target == BASKET_STATE_CLOSED);
          
       default:
          return false;
@@ -357,6 +358,23 @@ bool CBasketManager::ReconstructFromPersistence()
    m_active_basket = reconstructed;
    m_has_active_basket = true;
    m_status = StringConcatenate("reconstructed basket from persistence: ", active_id);
+   
+   return true;
+}
+
+bool CBasketManager::SetStartBalance(const string basket_id, const double balance)
+{
+   if(!m_has_active_basket || m_active_basket.id != basket_id)
+   {
+      m_status = "rejected: basket not found";
+      return false;
+   }
+   
+   m_active_basket.start_balance = balance;
+   m_status = StringConcatenate("start balance set to ", DoubleToString(balance));
+   
+   if(m_persistence != NULL)
+      m_persistence.SaveBasket(m_active_basket);
    
    return true;
 }
