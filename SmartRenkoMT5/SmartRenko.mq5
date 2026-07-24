@@ -20,10 +20,16 @@
 #include "Core/PresetProfileManager.mqh"
 #include "Core/VpsRunner.mqh"
 #include "Core/RenkoDataProvider.mqh"
+#include "Core/EntryStrategies.mqh"
+#include "Core/ExitStrategies.mqh"
 
 //--- Global handles
 CCoreOrchestrator*     g_orchestrator = NULL;
 CRenkoDataProvider*    g_renko_provider = NULL;
+CRenkoContinuationEntryStrategy* g_continuation_strategy = NULL;
+CRenkoReversalEntryStrategy*     g_reversal_strategy = NULL;
+CBasketTrailingExitStrategy*     g_trailing_exit_strategy = NULL;
+CIndividualPositionExitStrategy* g_position_exit_strategy = NULL;
 CBasketManager*        g_basket_mgr = NULL;
 CPositionManager*      g_position_mgr = NULL;
 CSignalManager*        g_signal_mgr = NULL;
@@ -190,23 +196,65 @@ int OnInit()
       g_orchestrator.SetMoneyManager(g_money_mgr);
    }
 
-   g_trailing_mgr = new CTrailingManager();
-   if(g_trailing_mgr != NULL)
-   {
-      g_trailing_mgr.OnInit("", 0.0, 0.0, 0.0, "{}");
-      g_orchestrator.SetTrailingManager(g_trailing_mgr);
-   }
+    g_trailing_mgr = new CTrailingManager();
+    if(g_trailing_mgr != NULL)
+    {
+       g_trailing_mgr.OnInit("", 0.0, 0.0, 0.0, "{}");
+       g_orchestrator.SetTrailingManager(g_trailing_mgr);
+    }
 
-   if(g_basket_mgr != NULL)
-   {
-      if(!g_basket_mgr.ReconstructFromPersistence())
-      {
-         if(!g_basket_mgr.ReconstructFromPositions())
-         {
-            Print("INFO: No active basket to reconstruct");
-         }
-      }
-   }
+    g_continuation_strategy = new CRenkoContinuationEntryStrategy();
+    if(g_continuation_strategy != NULL)
+    {
+       g_continuation_strategy.OnInit(symbol, InpMagicNumber);
+       g_continuation_strategy.SetRenkoProvider(g_renko_provider);
+       g_continuation_strategy.LoadParameters("min_continuation_bricks=2;lookback_bricks=10;min_strength=0.5;require_no_reversal=1");
+    }
+
+    g_reversal_strategy = new CRenkoReversalEntryStrategy();
+    if(g_reversal_strategy != NULL)
+    {
+       g_reversal_strategy.OnInit(symbol, InpMagicNumber);
+       g_reversal_strategy.SetRenkoProvider(g_renko_provider);
+       g_reversal_strategy.LoadParameters("min_reversal_bricks=1;min_strength=0.7");
+    }
+
+    g_trailing_exit_strategy = new CBasketTrailingExitStrategy();
+    if(g_trailing_exit_strategy != NULL)
+    {
+       g_trailing_exit_strategy.OnInit(symbol, InpMagicNumber);
+       g_trailing_exit_strategy.SetTrailingManager(g_trailing_mgr);
+    }
+
+    g_position_exit_strategy = new CIndividualPositionExitStrategy();
+    if(g_position_exit_strategy != NULL)
+    {
+       g_position_exit_strategy.OnInit(symbol, InpMagicNumber);
+       g_position_exit_strategy.LoadParameters("fixed_profit_threshold=0.0;fixed_loss_threshold=0.0");
+    }
+
+    if(g_signal_mgr != NULL)
+    {
+       if(g_continuation_strategy != NULL)
+          g_signal_mgr.RegisterEntryStrategy(g_continuation_strategy);
+       if(g_reversal_strategy != NULL)
+          g_signal_mgr.RegisterEntryStrategy(g_reversal_strategy);
+       if(g_trailing_exit_strategy != NULL)
+          g_signal_mgr.RegisterExitStrategy(g_trailing_exit_strategy);
+       if(g_position_exit_strategy != NULL)
+          g_signal_mgr.RegisterExitStrategy(g_position_exit_strategy);
+    }
+
+    if(g_basket_mgr != NULL)
+    {
+       if(!g_basket_mgr.ReconstructFromPersistence())
+       {
+          if(!g_basket_mgr.ReconstructFromPositions())
+          {
+             Print("INFO: No active basket to reconstruct");
+          }
+       }
+    }
 
    EventSetTimer(1);
 
@@ -221,14 +269,42 @@ void OnDeinit(const int reason)
 {
    EventKillTimer();
 
-   if(g_renko_provider != NULL)
-   {
-      g_renko_provider.OnDeinit();
-      delete g_renko_provider;
-      g_renko_provider = NULL;
-   }
+    if(g_renko_provider != NULL)
+    {
+       g_renko_provider.OnDeinit();
+       delete g_renko_provider;
+       g_renko_provider = NULL;
+    }
 
-   if(g_vps != NULL)
+    if(g_continuation_strategy != NULL)
+    {
+       g_continuation_strategy.OnDeinit();
+       delete g_continuation_strategy;
+       g_continuation_strategy = NULL;
+    }
+
+    if(g_reversal_strategy != NULL)
+    {
+       g_reversal_strategy.OnDeinit();
+       delete g_reversal_strategy;
+       g_reversal_strategy = NULL;
+    }
+
+    if(g_trailing_exit_strategy != NULL)
+    {
+       g_trailing_exit_strategy.OnDeinit();
+       delete g_trailing_exit_strategy;
+       g_trailing_exit_strategy = NULL;
+    }
+
+    if(g_position_exit_strategy != NULL)
+    {
+       g_position_exit_strategy.OnDeinit();
+       delete g_position_exit_strategy;
+       g_position_exit_strategy = NULL;
+    }
+
+    if(g_vps != NULL)
    {
       g_vps.Stop();
       g_vps.OnDeinit();
