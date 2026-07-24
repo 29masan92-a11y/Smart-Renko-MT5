@@ -299,6 +299,11 @@ public:
    virtual bool      IsActive() = 0;
    virtual double    GetPeakProfit() = 0;
    virtual bool      RestoreState(const double peak_profit, const bool activated) = 0;
+   virtual void      LoadParameters(const string config_json) = 0;
+   virtual bool      PersistState() = 0;
+   virtual bool      RestoreFromPersistence(const string basket_id) = 0;
+   virtual void      HandlePartialClose(const double remaining_profit) = 0;
+   virtual double    GetAdjustedProfit(const double raw_profit) const = 0;
    virtual string    GetDiagnostics() = 0;
 };
 

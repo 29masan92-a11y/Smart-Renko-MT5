@@ -56,6 +56,7 @@ input string             InpProfileName        = "Default";
 input double             InpRenkoBrickSize     = 0.0;
 input string             InpRiskConfig         = "daily_realized_loss_limit=100;floating_drawdown_threshold=50;max_total_open_trades=10;spread_max=50;cooldown_minutes=30";
 input string             InpMoneyConfig        = "use_balance_based=1;balance_factor=1;fixed_lot=0.1";
+input string             InpTrailingConfig     = "include_commission=1;include_swap=1;min_eval_seconds=1;drops_to_close=2";
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -201,7 +202,8 @@ int OnInit()
     g_trailing_mgr = new CTrailingManager();
     if(g_trailing_mgr != NULL)
     {
-       g_trailing_mgr.OnInit("", 0.0, 0.0, 0.0, "{}");
+       g_trailing_mgr.OnInit("", 0.0, 0.0, 0.0, InpTrailingConfig);
+       g_trailing_mgr.SetPersistenceLayer(g_persistence);
        g_orchestrator.SetTrailingManager(g_trailing_mgr);
     }
 

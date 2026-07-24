@@ -243,37 +243,67 @@ void CCoreOrchestrator::ProcessPendingFirstEntry(const SBasket &basket)
 
 void CCoreOrchestrator::ProcessActiveOrTrailingBasket(const SBasket &basket, const SRenkoBrick &brick)
 {
-   if(m_trailing_manager != NULL && m_trailing_manager->IsActive())
+   if(m_trailing_manager != NULL)
    {
       double total_profit = 0.0;
       if(m_position_manager != NULL)
          total_profit = m_position_manager->GetTotalProfit(basket.id);
-        
-      if(m_trailing_manager->Evaluate(total_profit))
+
+      bool was_active = m_trailing_manager->IsActive();
+      bool should_close = m_trailing_manager->Evaluate(total_profit);
+
+      if(should_close)
       {
          TryCloseActiveBasket(basket);
          return;
       }
+
+      if(!was_active && m_trailing_manager->IsActive())
+      {
+         if(m_basket_manager != NULL)
+         {
+            SBasket updated = basket;
+            updated.state = BASKET_STATE_TRAILING_ACTIVE;
+            updated.trailing_activated = true;
+            m_basket_manager->UpdateBasketState(basket.id, BASKET_STATE_TRAILING_ACTIVE);
+         }
+      }
+
+      if(m_trailing_manager->IsActive())
+      {
+         m_trailing_manager->PersistState();
+      }
    }
-    
+
    SPosition positions[];
    int pos_count = 0;
    if(m_position_manager != NULL)
       m_position_manager->GetPositionsByBasket(basket.id, positions, pos_count);
-    
+
+   int active_count = 0;
    for(int i = 0; i < pos_count; i++)
    {
-      if(!positions[i].is_active) continue;
-        
-      SSignal exit_signal;
-      ZeroMemory(exit_signal);
-      if(m_signal_manager->AggregateExitSignals(exit_signal, basket, positions[i], positions[i].profit))
+      if(positions[i].is_active)
       {
-         TryCloseActiveBasket(basket);
-         return;
+         active_count++;
+         SSignal exit_signal;
+         ZeroMemory(exit_signal);
+         if(m_signal_manager->AggregateExitSignals(exit_signal, basket, positions[i], positions[i].profit))
+         {
+            TryCloseActiveBasket(basket);
+            return;
+         }
       }
    }
-    
+
+   if(active_count < pos_count && m_trailing_manager != NULL && m_trailing_manager->IsActive())
+   {
+      double total_profit = 0.0;
+      if(m_position_manager != NULL)
+         total_profit = m_position_manager->GetTotalProfit(basket.id);
+      m_trailing_manager->HandlePartialClose(total_profit);
+   }
+
    if(basket.state == BASKET_STATE_ACTIVE && m_renko_provider != NULL && m_renko_provider.IsContinuation())
    {
       TryAddOnEntry(basket, brick);
@@ -313,9 +343,19 @@ void CCoreOrchestrator::ProcessRecoveryBasket(const SBasket &basket)
       {
          m_basket_manager->UpdateBasketState(basket.id, BASKET_STATE_ACTIVE);
             
-         if(m_trailing_manager != NULL && basket.trailing_activated)
+         if(m_trailing_manager != NULL)
          {
-            m_trailing_manager->RestoreState(basket.peak_floating_profit, true);
+            if(basket.trailing_activated)
+            {
+               if(!m_trailing_manager->RestoreState(basket.peak_floating_profit, true))
+               {
+                  m_trailing_manager->RestoreFromPersistence(basket.id);
+               }
+            }
+            else
+            {
+               m_trailing_manager->RestoreFromPersistence(basket.id);
+            }
          }
       }
    }
@@ -367,15 +407,14 @@ bool CCoreOrchestrator::TryOpenFirstEntry(const string basket_id)
       return false;
     
    SMoneyInput money_input = BuildMoneyInput(basket_id, false, 0);
-   if(!m_risk_manager->ValidateEntry(money_input))
-      return false;
-   if(!m_risk_manager->CheckMaxBasketLoss(basket)) return false;
-   if(!m_risk_manager->CheckMaxSymbolExposure(m_symbol)) return false;
-      return false;
+    if(!m_risk_manager->ValidateEntry(money_input))
+       return false;
+    if(!m_risk_manager->CheckMaxBasketLoss(basket)) return false;
+    if(!m_risk_manager->CheckMaxSymbolExposure(m_symbol)) return false;
     
-   SMoneyResult lot_result = m_money_manager->CalculateLot(money_input);
+    SMoneyResult lot_result = m_money_manager->CalculateLot(money_input);
    if(!lot_result.allowed)
-      return false;
+         return false;
     
    double lot_step, min_lot, max_lot, point;
    int digits;
@@ -413,7 +452,8 @@ bool CCoreOrchestrator::TryOpenFirstEntry(const string basket_id)
     
    if(m_trailing_manager != NULL)
    {
-      m_trailing_manager->OnInit(basket_id, balance, 0.0, 0.0, "{}");
+      m_trailing_manager->OnInit(basket_id, balance, 0.0, 0.0, InpTrailingConfig);
+      m_trailing_manager->LoadParameters(InpTrailingConfig);
    }
     
    if(m_persistence_layer != NULL)
